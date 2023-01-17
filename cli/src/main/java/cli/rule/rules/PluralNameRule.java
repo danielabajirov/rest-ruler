@@ -1,6 +1,7 @@
 package cli.rule.rules;
 
 import cli.rule.constants.*;
+import cli.utility.DataCache;
 import io.swagger.v3.oas.models.OpenAPI;
 import cli.rule.IRestRule;
 import cli.rule.Violation;
@@ -21,6 +22,7 @@ public class PluralNameRule implements IRestRule {
     private static final List<RuleSoftwareQualityAttribute> RULE_SOFTWARE_QUALITY_ATTRIBUTE_LIST = List
             .of(RuleSoftwareQualityAttribute.USABILITY, RuleSoftwareQualityAttribute.MAINTAINABILITY);
     private boolean isActive;
+    public static DataCache dataCache = new DataCache();
 
     public PluralNameRule(boolean isActive) {
         this.isActive = isActive;
@@ -96,6 +98,11 @@ public class PluralNameRule implements IRestRule {
 
     private Violation getLstViolationsFromPathSegments(String path, String[] pathSegments) {
         String firstPathSegment = "";
+        String switchPathSegment = "";
+        String dataFromCache = "";
+        String initialToken = "";
+        String token = "";
+        String currentSwitchPathSegment = "";
         List<String> listPathSegments = new ArrayList<>(List.of(pathSegments));
         listPathSegments.removeAll(Arrays.asList("", null));
         listPathSegments.removeAll(Arrays.asList(" ", null));
@@ -105,10 +112,17 @@ public class PluralNameRule implements IRestRule {
         // Set the switch based on the firstPathSegment. We need to see if a path has
         // the form singular/plural/singular.. or plural/singular/plural.. based on the
         // firstPathSegment
-        String initialToken = getTokenNLP(firstPathSegment);
-        if (initialToken == null)
-            return null;
-        String switchPathSegment = getTokenFromWord(initialToken);
+        dataFromCache = dataCache.getFromCache(firstPathSegment);
+        if(dataFromCache.equals("Not found")){
+            initialToken = getTokenNLP(firstPathSegment);
+            if (initialToken == null)
+                return null;
+            switchPathSegment = getTokenFromWord(initialToken);
+            dataCache.insertIntoCache(firstPathSegment, switchPathSegment);
+        }
+        else{
+            switchPathSegment = dataFromCache;
+        }
 
         for (String pathSegment : listPathSegments) {
             if (listPathSegments.get(0).equals(pathSegment))
@@ -131,8 +145,16 @@ public class PluralNameRule implements IRestRule {
                 continue;
             }
             // Get singular or plural based on the token
-            String token = getTokenNLP(pathSegment);
-            String currentSwitchPathSegment = getTokenFromWord(token);
+            // Get singular or plural based on the token
+            dataFromCache = dataCache.getFromCache(pathSegment);
+
+            if(dataFromCache.equals("Not found")){
+                token = getTokenNLP(pathSegment);
+                currentSwitchPathSegment = getTokenFromWord(token);
+                dataCache.insertIntoCache(pathSegment, currentSwitchPathSegment);
+            }else{
+                currentSwitchPathSegment = dataFromCache;
+            }
             // If the word is singular but the current switchPathSegment is plural, then we
             // have a violation.
             if (switchPathSegment.equals(SingularDocumentNameRule.SINGULAR) && currentSwitchPathSegment.equals(SingularDocumentNameRule.SINGULAR)) {

@@ -1,6 +1,7 @@
 package cli.rule.rules;
 
 import cli.rule.constants.*;
+import cli.utility.DataCache;
 import io.swagger.v3.oas.models.OpenAPI;
 
 import cli.rule.IRestRule;
@@ -24,6 +25,7 @@ public class SingularDocumentNameRule implements IRestRule {
     private boolean isActive;
     public static final String PLURAL = "plural";
     public static final String SINGULAR = "singular";
+    public static DataCache dataCache = new DataCache();
 
     public SingularDocumentNameRule(boolean isActive) {
         this.isActive = isActive;
@@ -126,6 +128,10 @@ public class SingularDocumentNameRule implements IRestRule {
     private Violation getLstViolationsFromPathSegments(String path, String[] pathSegments) {
         String switchPathSegment = "";
         String firstPathSegment = "";
+        String dataFromCache = "";
+        String initialToken = "";
+        String token = "";
+        String currentSwitchPathSegment = "";
         List<String> listPathSegments = new ArrayList<>(List.of(pathSegments));
         listPathSegments.removeAll(Arrays.asList("", null));
         listPathSegments.removeAll(Arrays.asList(" ", null));
@@ -135,10 +141,19 @@ public class SingularDocumentNameRule implements IRestRule {
         // Set the switch based on the firstPathSegment. We need to see if a path has
         // the form singular/plural/singular.. or plural/singular/plural.. based on the
         // firstPathSegment
-        String initialToken = getTokenNLP(firstPathSegment);
-        if (initialToken == null)
-            return null;
-        switchPathSegment = getTokenFromWord(initialToken);
+        dataFromCache = dataCache.getFromCache(firstPathSegment);
+        if(dataFromCache.equals("Not found")){
+            initialToken = getTokenNLP(firstPathSegment);
+            if (initialToken == null)
+                return null;
+            switchPathSegment = getTokenFromWord(initialToken);
+            dataCache.insertIntoCache(firstPathSegment, switchPathSegment);
+        }
+        else{
+            switchPathSegment = dataFromCache;
+        }
+
+
 
         for (String pathSegment : listPathSegments) {
             // Skip the first path segment. It was already controlled.
@@ -153,8 +168,16 @@ public class SingularDocumentNameRule implements IRestRule {
             }
 
             // Get singular or plural based on the token
-            String token = getTokenNLP(pathSegment);
-            String currentSwitchPathSegment = getTokenFromWord(token);
+            dataFromCache = dataCache.getFromCache(pathSegment);
+
+            if(dataFromCache.equals("Not found")){
+                token = getTokenNLP(pathSegment);
+                currentSwitchPathSegment = getTokenFromWord(token);
+                dataCache.insertIntoCache(pathSegment, currentSwitchPathSegment);
+            }else{
+                currentSwitchPathSegment = dataFromCache;
+            }
+
             // If the word is plural but the current switchPathSegment is singular, then we
             // have a violation.
             if (switchPathSegment.equals(PLURAL) && currentSwitchPathSegment.equals(PLURAL)) {
